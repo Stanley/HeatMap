@@ -1,0 +1,10 @@
+h1. HeatMap
+This is a "scala":http://www.scala-lang.org/ application for generating geo-overlays, which represents data using colors, know as heat map.
+
+h2. Usage
+
+This project is not redy for usage yet.
+
+h2. Instalation
+
+...
