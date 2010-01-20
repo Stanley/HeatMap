@@ -1,0 +1,9 @@
+circle{
+  padding:0;
+  margin:0
+}
+
+circle:hover{
+  stroke: #fff;
+  stroke-width: 0.01mm;
+}

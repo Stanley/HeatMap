@@ -1,0 +1,120 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"> 
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml"> 
+  <head> 
+    <meta http-equiv="content-type" content="text/html; charset=utf-8"/> 
+    <title>Google Maps JavaScript API Example: Ground Overlays</title> 
+    <link href="example.css" rel="stylesheet" type="text/css" />
+    <script src="http://maps.google.com/maps?file=api&amp;v=2&amp;key=ABQIAAAAzr2EBOXUKnm_jVnk0OJI7xSosDVG8KKPE1-m51RBrvYughuyMxQ-i1QfUnH94QxWIa6N4U6MouMmBA"
+            type="text/javascript"></script> 
+    <script type="text/javascript"> 
+    function initialize() {
+
+
+      // create the object 
+      function overlaySVG( svgUrl, bounds) 
+      { 
+        this.svgUrl_ = svgUrl; 
+        this.bounds_ = bounds; 
+      } 
+
+      // prototype 
+      overlaySVG.prototype = new GOverlay(); 
+      // initialize 
+      overlaySVG.prototype.initialize = function( map) 
+      { 
+        //create new div node 
+        var svgDiv = document.createElement("div"); 
+        svgDiv.setAttribute( "id", "svgDivison"); 
+        //svgDiv.setAttribute( "style", "position:absolute"); 
+        svgDiv.style.position = "absolute"; 
+        svgDiv.style.top = 0; 
+        svgDiv.style.left = 0; 
+        svgDiv.style.height = 0; 
+        svgDiv.style.width = 0; 
+        map.getPane(G_MAP_MAP_PANE).appendChild(svgDiv); 
+        // create new svg element and set attributes 
+        var svgRoot = document.createElementNS( "http://www.w3.org/2000/svg", "svg"); 
+        svgRoot.setAttribute( "id", "svgRoot"); 
+        svgRoot.setAttribute( "width", "100%"); 
+        svgRoot.setAttribute( "height","100%"); 
+        svgDiv.appendChild( svgRoot); 
+        // load the SVG file 
+        GDownloadUrl( this.svgUrl_, function( data, responseCode) 
+        { 
+          var xml = GXml.parse(data); 
+          // specify the svg attributes 
+          svgRoot.setAttribute("viewBox", xml.documentElement.getAttribute("viewBox")); 
+          // append the defs 
+          var def = xml.documentElement.getElementsByTagName("defs"); 
+          //for( var int=0; i<def.length; i++) 
+                  svgRoot.appendChild(def[0].cloneNode(true)); 
+          //append the main group 
+          var nodes = xml.documentElement.getElementsByTagName("g"); 
+
+          for (var i = 0; i < nodes.length; i++) { 
+              svgRoot.appendChild(nodes[i].cloneNode(true)); 
+
+          var outline = xml.documentElement.getElementById("outline");
+          // this.MoveToBottom(outline)
+          }
+        }); 
+        // keep interesting datas 
+        this.svgDiv_ = svgDiv; 
+        this.map_ = map; 
+        // set position and zoom 
+        this.redraw(true); 
+      } 
+
+      // remove from the map pane 
+      overlaySVG.prototype.remove = function() { 
+          this.div_.parentNode.removeChild( this.div_); 
+      } 
+
+      // Copy our data to a new overlaySVG... 
+      overlaySVG.prototype.copy = function() { 
+          return new overlaySVG( this.url_, this.bounds_, this.center_); 
+      } 
+
+      // Redraw based on the current projection and zoom level... 
+      overlaySVG.prototype.redraw = function( force) { 
+          // We only need to redraw if the coordinate system has changed 
+          if (!force) return; 
+          // get the position in pixels of the bound 
+          posNE = map.fromLatLngToDivPixel(this.bounds_.getNorthEast ()); 
+          posSW = map.fromLatLngToDivPixel(this.bounds_.getSouthWest()); 
+          // compute the absolute position (in pixels) of the div ... 
+          this.svgDiv_.style.left = Math.min(posNE.x,posSW.x) + "px"; 
+          this.svgDiv_.style.top = Math.min(posSW.y,posNE.y) + "px"; 
+          // ... and its size 
+          this.svgDiv_.style.width = Math.abs(posSW.x - posNE.x) + "px"; 
+          this.svgDiv_.style.height = Math.abs(posSW.y - posNE.y) + "px"; 
+      } 
+
+      overlaySVG.prototype.MoveDown = function(svgNode, index){
+        svgNode.parentNode.insertBefore( svgNode, svgNode.parentNode.firstChild );
+      }
+
+      //And, you can use it with the following code: 
+      if (GBrowserIsCompatible()) 
+      { 
+          //load map 
+          var map = new GMap2(document.getElementById("map")); 
+          // create overlay 
+          var boundaries = new GLatLngBounds( new GLatLng(50.11668531313852,20.206199645996094), new GLatLng(49.97678510561899,19.81996726989746)); 
+
+          map.addOverlay( new overlaySVG( "example.svg", boundaries )); 
+          //add control and set map center 
+          map.setUIToDefault();
+          map.setCenter(new GLatLng(50.05,20), 12); 
+      } 
+
+
+
+    }
+    </script> 
+  </head> 
+  <body onload="initialize()" onunload="GUnload()"> 
+    <div id="map" style="width: 100%; height: 700px"></div> 
+  </body> 
+</html> 
