@@ -1,126 +1,103 @@
-import java.awt.Color
 import scala.io.Source
-import scala.xml.XML._
 import scala.xml.NodeBuffer
-import scala.xml.dtd.{DocType, PublicID}
+import com.seisw.util.geom.{Poly, PolyDefault}
 
-object HeatMap {
+class HeatMap(source: Source) {    
   
-  // Image width in pixels
-  val width: Int = 1000
-  // Avg. speed
-  val speed: Int = 5
-  // Time limit in hours
-  val limit: Float = 0.25f   
-  // Distance in kilometers
-  val dist: Float = speed * limit    
+  // Convert numbers from source to List (of List of 3 params: x, y, z)
+  val data: List[Point] = List.fromString(source.mkString, '\n').map{line =>
+    val args:List[Float] = List.fromString(line, ' ').map(_.toFloat)
+    new Point(args(0), args(1), args(2).toInt)
+  }
   
-  // Zamienia liczbę z przedziału 0-100 na odpowiadający mu kolor w zefiniowanym gardiencie
-  def color(percent: Int): Color = {		
+  // Find min and max value of latitude and longitude
+  val lats: List[Float] = data.map( row => row.lat)
+  val w: Float = lats.reduceLeft(Math.min(_,_))
+  val e: Float = lats.reduceLeft(Math.max(_,_))
+
+  val lngs: List[Float] = data.map( row => row.lng)
+  val s: Float = lngs.reduceLeft(Math.min(_,_))
+  val n: Float = lngs.reduceLeft(Math.max(_,_))
+    
+  // Object which represents given Earth sector as rectangle
+  val geo = new Geo(n, e, s, w, data)
+                    
+  // Zamienia liczbę z przedziału 0-100 na odpowiadający mu kolor w zefiniowanym gradiencie
+  def color(percent: Int): String = {		
   
+    val str = "%02X%02X%02X"
     val decr: Double = if(percent % 33 == 0) 1 else percent % 33 / 33.0
     val incr: Double = 1 - decr
     
 	percent match {
-      case x if 0 to 33 contains x =>
-        new Color(0, (255*decr).toInt, (255).toInt)
+	  case 0 =>
+        str.format(255, 0, 0)
+      case x if 1 to 33 contains x =>
+        str.format(255, (255*decr).toInt, 0)
       case x if 34 to 66 contains x =>				
-        new Color((255*decr).toInt, (255).toInt, (255*incr).toInt)
+        str.format((255*incr).toInt, (255).toInt, (255*decr).toInt)
       case x if 67 to 99 contains x =>
-        new Color(255, (255*incr).toInt, 0)
-      case 100 =>
-        new Color(255, 0, 0)
+        str.format(0, (255*incr).toInt, (255).toInt)
       case _ =>
-        new Color(0, 0, 255)			  
+        str.format(0, 0, 255)			  
       }    
   }
-  
-  def main(args: Array[String]) {
-				
-    // Read file with initial data 
-    val source = Source.fromFile("../data/AWF.input")
-  
-    // Convert numbers from file to List (of List of 3 params: x, y, z)
-    val array: List[List[Float]] = List.fromString(source.mkString, '\n').map(List.fromString(_, ' ').map(_.toFloat))
-        
-    // Wspólna wielkość dla wszystkich elips
-//    val map: Element = document.createElement("map")    
-//    map.setAttribute("rx", (geo.longitude_to_pixels(dist)/2).toString)
-//    map.setAttribute("ry", (geo.latitude_to_pixels(dist)/2).toString)
-//    root.appendChild(map)
-                                                  
-                                                    		
-    // Declare the doctype of XML document
-    val doctype = DocType("svg", PublicID("-//W3C//DTD SVG 1.0//EN", "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd"), Nil)
     
-    // Create root node
-    val root = <svg>{ list(array) }</svg>      		
-      
-    saveFull("filename", root, "UTF-8", true, doctype)
-              
-  }
-  
-  // Sort the list so more important nodes will be on top of the image
-  def list(data: List[List[Float]]): NodeBuffer = {
+  // Generates 100 gradiens 
+  def gradients: NodeBuffer = {
+    val result = new NodeBuffer
+    for(i <- 1 to 100){
+      val hex: String = color(i)
+      val gradient = <radialGradient id={"g_" + i}>
+          <stop offset="50%" style={"stop-opacity:0.7; stop-color: #" + hex } />
+          <stop offset="100%" style={"stop-opacity:0.1; stop-color: #" + hex } />
+        </radialGradient>
+      result &+ gradient
+    }
+    result
+  }  
     
-    // Find min and max value of latitude and longitude
-    val lats: List[Float] = data.map( row => row(0))
-    val w: Float = lats.reduceLeft(Math.min(_,_))
-    val e: Float = lats.reduceLeft(Math.max(_,_))
-
-    val lngs: List[Float] = data.map( row => row(1))
-    val s: Float = lngs.reduceLeft(Math.min(_,_))
-    val n: Float = lngs.reduceLeft(Math.max(_,_))
-
-    val factor: Float = this.width / (e-w)
-    val geo = new Geo(w,s)
+  def circles: NodeBuffer = {   
     
     val result = new NodeBuffer
-    data.sort(_(2) > _(2)).foreach{ row =>
-      result &+ (<elipse
-                   cx={ ((row(0)-w)*factor).toString } 
-                   cy={ ((row(1)-s)*factor).toString }                   
-                 />)
-      
-//      paint(svgGenerator, (row(0)-w)*factor, (row(1)-s)*factor, (100 - row(2)).toInt, geo)
-      
-//      ellipse.setAttribute("rx", (geo.longitude_to_pixels(dist)/2).toString)
-//      ellipse.setAttribute("ry", (geo.latitude_to_pixels(dist)/2).toString)                                     
+    
+    // Sort the list so more important nodes will be on top of the image
+    geo.circles.sort(_.z > _.z).foreach{ circle =>        
+      val c = <circle
+          style={ "fill: url(#g_" + circle.z + ")"}      
+          cx={ circle.x.toString } 
+          cy={ circle.y.toString }  
+          r={ circle.r.toString }>
+        </circle>         
+       
+      result &+ c                                                                
     }       
     result
-  }
-}
-
-class Geo(w: Float, s: Float) {
+  }  
+  
+  def polygon(limit: Int): NodeBuffer = {
     
-  val longitude_factor: Float = length(w, s, w, s+1).toFloat
-  val latitude_factor:  Float = length(w, s, w+1, s).toFloat
-  
-  // Returns length in kilometers from and to given points
-  // Takes two points
-  def length(p1_lng: Double, p1_lat: Double, p2_lng: Double, p2_lat: Double): Double = {
-    val r = 6371
-    val to_rad = 3.142 / 180
-
-    val d_lat = (p2_lat - p1_lat) * to_rad
-    val d_lng = (p2_lng - p1_lng) * to_rad
-
-    val a = Math.sin(d_lat / 2) * Math.sin(d_lat / 2) +
-    Math.cos(p1_lat * to_rad) * Math.cos(p2_lat * to_rad) *
-    Math.sin(d_lng / 2) * Math.sin(d_lng / 2)
-    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    r * c
-  }
-  
-  // Returns number of pixels which are required to draw horizontal line
-  // Takes line lenght in kilometers
-  def longitude_to_pixels(lenght: Float): Int = {
-    Math.round(lenght * longitude_factor)
-  }
-  
-  // Returns number of pixels which are required to draw vertical line
-  // Takes line lenght in kilometers
-  def latitude_to_pixels(lenght: Float): Int = {
-    Math.round(lenght * latitude_factor)
-  }
+    val set = geo.circles.filter(circle => (circle.z <= limit))
+    
+    val result = new NodeBuffer
+    var poly: Poly = new PolyDefault
+    
+    set.foreach(circle => poly = poly.union(circle.toPoly))
+    
+    Console.println("size: " + poly.getArea + " km2")
+    
+    var points = "M" + poly.getX(0) + " " + poly.getY(0)
+    
+    for(i <- 1 until poly.getNumPoints){
+      points = points + " L" + poly.getX(i) + " " + poly.getY(i)
+    }
+    
+    val polyline = <path
+      d={ points + " Z" }
+      style="fill:white; fill-opacity:0; stroke:white; stroke-width:0.02">
+    </path>
+        
+    result &+ polyline        
+    result
+  }  
 }
